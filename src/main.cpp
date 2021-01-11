@@ -18,7 +18,7 @@
 
 // Macro para identificar si un botón está pulsado
 #define BUTTONPRESSED(X)  ((X) >= 512 ? 0 : 1)
-#define TRIACTIVATION 100 // 100 millis pulsado cuando haya cambio de posición
+#define ACTIVATION 100 // 100 millis pulsado cuando haya cambio de posición (bi y tri)
 
 #define TOTALBUTTONS  128 // Botones a notificar por HID
 
@@ -35,6 +35,14 @@ const unsigned char triPin[] { IN0, IN0 }; // Pines analógicos
 
 unsigned char triLast[MAXTRI]; // Último estado leído (para pulsar sólo cambios)
 unsigned long triMillis[MAXTRI]; // Último momento de cambio de estado
+
+#define MAXBI 2
+const unsigned char biBtn[] = { 20, 21,  23, 24 }; // Botones, en grupos de 2
+const unsigned char biAddr[] { 1, 15 }; // Dirección MUX16 de posición ON
+const unsigned char biPin[] { IN0, IN0 }; // Pines analógicos
+
+unsigned char biLast[MAXTRI]; // Último estado leído (para pulsar sólo cambios)
+unsigned long biMillis[MAXTRI]; // Último momento de cambio de estado
 
 #define MAXAXIS 2
 const unsigned char axisId[] = { AXIS_Z, AXIS_RX }; // Ejes
@@ -148,7 +156,7 @@ void setTristate(unsigned char triId, unsigned char btnLeft, unsigned char btnCe
   }
 
   // Si paso mucho tiempo, todo cero
-  if(triMillis[triId] < millis() - TRIACTIVATION) {
+  if(triMillis[triId] < millis() - ACTIVATION) {
     Joystick.setButton(btnLeft, 0);
     Joystick.setButton(btnCenter, 0);
     Joystick.setButton(btnRight, 0);
@@ -172,6 +180,40 @@ void setTristate(unsigned char triId, unsigned char btnLeft, unsigned char btnCe
       Joystick.setButton(btnLeft, 0);
       Joystick.setButton(btnCenter, 1);
       Joystick.setButton(btnRight, 0);
+      break;
+  }
+}
+
+void setBistate(unsigned char biId, unsigned char btnOn, unsigned char btnOff, unsigned char addr, unsigned char pin) {
+  v = readValue(addr, pin);
+
+  if(BUTTONPRESSED(v)) {
+    flag = 1;
+  } else {
+    flag = 0;
+  }
+
+  if(flag != biLast[biId]) {
+    biMillis[biId] = millis();
+    biLast[biId] = flag;
+  }
+
+  // Si paso mucho tiempo, todo cero
+  if(biMillis[biId] < millis() - ACTIVATION) {
+    Joystick.setButton(btnOn, 0);
+    Joystick.setButton(btnOff, 0);
+    return;
+  }
+
+  switch(biLast[biId]) {
+    case 1:
+      Joystick.setButton(btnOn, 1);
+      Joystick.setButton(btnOff, 0);
+      break;
+
+    case 0:
+      Joystick.setButton(btnOn, 0);
+      Joystick.setButton(btnOff, 1);
       break;
   }
 }
@@ -216,7 +258,11 @@ void setup() {
   for(n = 0; n < MAXTRI; n++) {
     triLast[n] = 3;
     triMillis[n] = 0;
-    setAxisRange(n, axisMin[n], axisMax[n]);
+  }
+
+  for(n = 0; n < MAXBI; n++) {
+    biLast[n] = 2;
+    biMillis[n] = 0;
   }
 
   Joystick.begin(false); // autoSendMode = false
@@ -233,6 +279,10 @@ void loop() {
 
   for(n = 0; n < MAXTRI; n++) {
     setTristate(n, triBtn[n*3], triBtn[n*3+1], triBtn[n*3+2], triAddr1[n], triAddr2[n], triPin[n]);
+  }
+
+  for(n = 0; n < MAXBI; n++) {
+    setBistate(n, biBtn[n*2], biBtn[n*2+1], biAddr[n], biPin[n]);
   }
 
   for(n = 0; n < MAXHAT; n++) {
