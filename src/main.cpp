@@ -1,13 +1,20 @@
 #include <Arduino.h>
 #include "Joystick.h"
 
+#define TRACKBALLMAX  100 // Pasos de movimiento de trackball = 100%
+#define TRACKBALLSTEP 100
+#define UPDATEMILLIS 10 // Milisegundos entre actualizaciones de USB
+
 // Pines S0-S3 del MUX16
-#define MUXS0 15
-#define MUXS1 14
-#define MUXS2 16
-#define MUXS3 10
+#define MUXS0 10
+#define MUXS1 16
+#define MUXS2 14
+#define MUXS3 15
 // Alias de entradas analógicas
 #define IN0 A0
+#define IN1 A1
+#define IN2 A2
+#define IN3 A3
 // Constantes de identificación de ejes
 #define AXIS_X  0
 #define AXIS_Y  1
@@ -20,23 +27,23 @@
 #define BUTTONPRESSED(X)  ((X) >= 512 ? 0 : 1)
 #define ACTIVATION 100 // 100 millis pulsado cuando haya cambio de posición (bi y tri)
 
-#define TOTALBUTTONS  128 // Botones a notificar por HID
+#define TOTALBUTTONS  37 // Botones a notificar por HID
 
-#define MAXBTN 2
-const unsigned char btnId[] = { 127, 125 }; // Números de botones
-const unsigned char btnAddr[] = { 1, 15 }; // Direcciones del multiplexor (MUX16)
-const unsigned char btnPin[] = { IN0, IN0 }; // Pines analógicos donde leer el dato
+#define MAXBTN 4
+const unsigned char btnId[] =   {  0,    1,   2,  15,  21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 }; // Números de botones (0 based)
+const unsigned char btnAddr[] = { 15,    6,   4,   0,   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }; // Direcciones del multiplexor (MUX16)
+const unsigned char btnPin[] =  { IN3, IN3, IN3, IN3, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1 }; // Pines analógicos donde leer el dato
 
-#define MAXTRI 2
-const unsigned char triBtn[] = { 10, 11, 12,  13, 14, 15 }; // Botones, en grupos de 3
-const unsigned char triAddr1[] { 1, 15 }; // Dirección MUX16 de posición izq
-const unsigned char triAddr2[] { 15, 1 }; // Dirección MUX16 de posición der
-const unsigned char triPin[] { IN0, IN0 }; // Pines analógicos
+#define MAXTRI 4
+const unsigned char triBtn[] = { 3, 4, 5,   6, 7, 8,   9, 10, 11,   12, 13, 14  }; // Botones, en grupos de 3
+const unsigned char triAddr1[] {    7,        9,          11,           13      }; // Dirección MUX16 de posición izq
+const unsigned char triAddr2[] {    8,        10,         12,           14      }; // Dirección MUX16 de posición der
+const unsigned char triPin[] { IN3, IN3, IN3, IN3 }; // Pines analógicos
 
 unsigned char triLast[MAXTRI]; // Último estado leído (para pulsar sólo cambios)
 unsigned long triMillis[MAXTRI]; // Último momento de cambio de estado
 
-#define MAXBI 2
+#define MAXBI 0
 const unsigned char biBtn[] = { 20, 21,  23, 24 }; // Botones, en grupos de 2
 const unsigned char biAddr[] { 1, 15 }; // Dirección MUX16 de posición ON
 const unsigned char biPin[] { IN0, IN0 }; // Pines analógicos
@@ -44,23 +51,31 @@ const unsigned char biPin[] { IN0, IN0 }; // Pines analógicos
 unsigned char biLast[MAXTRI]; // Último estado leído (para pulsar sólo cambios)
 unsigned long biMillis[MAXTRI]; // Último momento de cambio de estado
 
-#define MAXAXIS 2
-const unsigned char axisId[] = { AXIS_Z, AXIS_RX }; // Ejes
-const unsigned char axisPin[] = { IN0, IN0 }; // Pines analógicos
-const unsigned char axisAddr[] = { 0, 2 }; // Direcciones del MUX16
-const char axisRev[] = { 1, 1 }; // 1 o 0, por si el valor está invertido
+#define MAXAXIS 0
+const unsigned char axisId[] = { AXIS_RZ, AXIS_Y }; // Ejes
+const unsigned char axisPin[] = { IN1, IN1 }; // Pines analógicos
+const unsigned char axisAddr[] = { 9, 15 }; // Direcciones del MUX16
+const char axisRev[] = { 0, 0 }; // 1 o 0, por si el valor está invertido
 
 unsigned int axisMax[MAXAXIS]; // Máximo leído de un eje
 unsigned int axisMin[MAXAXIS]; // Mínimo leído de un eje
 
-#define MAXHAT 2
-const unsigned char hatId[] = { 0, 1 }; // Hats
-const unsigned char hatAddr[] = { 1, 15, 14, 13,  14, 12, 15, 1 }; // MUX16 en grupos de 4 (Up, Right, Down, Left)
-const unsigned char hatPin[] = { IN0, IN0 }; // Pines analógicos
+#define MAXHAT 1
+const unsigned char hatId[] = { 0 }; // Hats
+const unsigned char hatAddr[] = { 1, 2, 3, 5 }; // MUX16 en grupos de 4 (Up, Right, Down, Left)
+const unsigned char hatPin[] = { IN3 }; // Pines analógicos
 
 
 // Variables temporales
 unsigned int v, w, x, y, n, flag;
+unsigned long lastUpdate = 0; // Micros con último update de Joystick
+
+struct trackballData {
+  bool status1, status2;
+  unsigned char pin1, pin2;
+  unsigned char axisId;
+  int value;
+} tbX, tbY;
 
 Joystick_ Joystick(
   JOYSTICK_DEFAULT_REPORT_ID,
@@ -69,10 +84,10 @@ Joystick_ Joystick(
   MAXHAT, // JOYSTICK_DEFAULT_HATSWITCH_COUNT
   true, // xAxis
   true, // yAxis
-  true, // zAxis
-  true, // rxAxis
+  false, // zAxis
+  false, // rxAxis
   false, // ryAxis
-  false, // rzAxis
+  true, // rzAxis
   false, // Rudder
   false, // Throttle
   false, // Accel
@@ -239,16 +254,73 @@ void setHat(unsigned char hatId, unsigned char addrUp, unsigned char addrRight, 
   } else Joystick.setHatSwitch(hatId, -1); // Sin pulsar
 }
 
+void processTrackball(trackballData *tb) {
+  if(tb->status1) {
+    if(digitalRead(tb->pin1) == LOW) {
+      tb->status1 = false;
+      tb->value += TRACKBALLSTEP;
+    }
+  } else {
+    if(digitalRead(tb->pin1) == HIGH) {
+      tb->status1 = true;
+      tb->value += TRACKBALLSTEP;
+    }
+  }
+
+  if(tb->status2) {
+    if(digitalRead(tb->pin2) == LOW) {
+      tb->status2 = false;
+      tb->value -= TRACKBALLSTEP;
+    }
+  } else {
+    if(digitalRead(tb->pin2) == HIGH) {
+      tb->status2 = true;
+      tb->value -= TRACKBALLSTEP;
+    }
+  }
+}
+
+void resetTrackball(trackballData *tb) {
+  int v = tb->value;
+  if(v > TRACKBALLMAX) v = TRACKBALLMAX;
+  else if(v < -TRACKBALLMAX) v = -TRACKBALLMAX;
+
+  switch(tb->axisId) {
+    case AXIS_X: Joystick.setXAxis(v); break;
+    case AXIS_Y: Joystick.setYAxis(v); break;
+    case AXIS_Z: Joystick.setZAxis(v); break;
+    case AXIS_RX: Joystick.setRxAxis(v); break;
+    case AXIS_RY: Joystick.setRyAxis(v); break;
+    case AXIS_RZ: Joystick.setRzAxis(v); break;
+  }
+
+/*  if(tb->value > 0) {
+    tb->value -= TRACKBALLMAX;
+    if(tb->value < 0) tb->value = 0;
+  } else if(tb->value < 0) {
+    tb->value += TRACKBALLMAX;
+    if(tb->value > 0) tb->value = 0;
+  }*/
+}
+
 void setup() {
-  Serial1.begin(9600);
+  Serial1.begin(115200);
   Serial1.println("Init");
 
-  pinMode(A0, INPUT_PULLUP);
+//  pinMode(IN0, INPUT_PULLUP);
+  pinMode(IN0, INPUT); // Específico para sensor hall, AH3503
+  pinMode(IN1, INPUT_PULLUP);
+  pinMode(IN2, INPUT_PULLUP);
+  pinMode(IN3, INPUT_PULLUP);
+
   pinMode(MUXS0, OUTPUT);
   pinMode(MUXS1, OUTPUT);
   pinMode(MUXS2, OUTPUT);
   pinMode(MUXS3, OUTPUT);
 
+  setAxisRange(AXIS_X, 0, 1023); // Exclusivo A0, sensor hall
+
+  // Rangos de ejes (mínimo)
   for(n = 0; n < MAXAXIS; n++) {
     axisMax[n] = 512;
     axisMin[n] = 511;
@@ -265,10 +337,41 @@ void setup() {
     biMillis[n] = 0;
   }
 
+  // Trackball X
+  tbX.pin1 = 3; // Dcha
+  tbX.pin2 = 4; // Izq
+  tbX.status1 = tbX.status2 = false;
+  tbX.value = 0;
+  tbX.axisId = AXIS_X;
+  setAxisRange(tbX.axisId, -TRACKBALLMAX, TRACKBALLMAX);
+  pinMode(tbX.pin1, INPUT);
+  pinMode(tbX.pin2, INPUT);
+  resetTrackball(&tbX);
+
+  // Trackball Y
+  tbY.pin1 = 5; // Dcha
+  tbY.pin2 = 6; // Izq
+  tbY.status1 = tbY.status2 = false;
+  tbY.value = 0;
+  tbY.axisId = AXIS_Y;
+  setAxisRange(tbY.axisId, -TRACKBALLMAX, TRACKBALLMAX);
+  pinMode(tbY.pin1, INPUT);
+  pinMode(tbY.pin2, INPUT);
+  resetTrackball(&tbY);
+
   Joystick.begin(false); // autoSendMode = false
 }
 
 void loop() {
+  unsigned long now = millis();
+
+  processTrackball(&tbX);
+  processTrackball(&tbY);
+
+  if(now - lastUpdate < UPDATEMILLIS) return;
+
+  Joystick.setRzAxis(analogRead(IN0)); // Eje de acelerador
+
   for(n = 0; n < MAXBTN; n++) {
     setButton(btnId[n], btnAddr[n], btnPin[n]);
   }
@@ -289,5 +392,16 @@ void loop() {
     setHat(hatId[n], hatAddr[n*4], hatAddr[n*4+1], hatAddr[n*4+2], hatAddr[n*4+3], hatPin[n]);
   }
 
+
+  resetTrackball(&tbX);
+  resetTrackball(&tbY);
+
   Joystick.sendState();
+  lastUpdate = now;
+
+/*  Serial1.print("X-: ");
+  Serial1.print(digitalRead(3) == HIGH ? "x" : "o");
+  Serial1.print(", X+: ");
+  Serial1.print(digitalRead(4) == HIGH ? "x" : "o");
+  Serial1.println();*/
 }
