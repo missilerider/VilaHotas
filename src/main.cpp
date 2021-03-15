@@ -1,8 +1,9 @@
 #include <Arduino.h>
 #include "Joystick.h"
 
-#define TRACKBALLMAX  100 // Pasos de movimiento de trackball = 100%
-#define TRACKBALLSTEP 100
+#define TRACKBALLMAX  32767 // Pasos de movimiento de trackball = 100%
+#define TRACKBALLSTEP 8192
+#define TRACKBALLDAMP 0.8
 #define UPDATEMILLIS 10 // Milisegundos entre actualizaciones de USB
 
 // Pines S0-S3 del MUX16
@@ -30,7 +31,7 @@
 #define TOTALBUTTONS  37 // Botones a notificar por HID
 
 #define MAXBTN 4
-const unsigned char btnId[] =   {  0,    1,   2,  15,  21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35 }; // Números de botones (0 based)
+const unsigned char btnId[] =   {  0,    1,   2,  31,  21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 36, 32, 33, 34, 35 }; // Números de botones (0 based)
 const unsigned char btnAddr[] = { 15,    6,   4,   0,   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }; // Direcciones del multiplexor (MUX16)
 const unsigned char btnPin[] =  { IN3, IN3, IN3, IN3, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1 }; // Pines analógicos donde leer el dato
 
@@ -75,6 +76,7 @@ struct trackballData {
   unsigned char pin1, pin2;
   unsigned char axisId;
   int value;
+  int realValue;
 } tbX, tbY;
 
 Joystick_ Joystick(
@@ -258,49 +260,54 @@ void processTrackball(trackballData *tb) {
   if(tb->status1) {
     if(digitalRead(tb->pin1) == LOW) {
       tb->status1 = false;
-      tb->value += TRACKBALLSTEP;
+      tb->value++;
     }
   } else {
     if(digitalRead(tb->pin1) == HIGH) {
       tb->status1 = true;
-      tb->value += TRACKBALLSTEP;
+      tb->value++;
     }
   }
 
   if(tb->status2) {
     if(digitalRead(tb->pin2) == LOW) {
       tb->status2 = false;
-      tb->value -= TRACKBALLSTEP;
+      tb->value--;
     }
   } else {
     if(digitalRead(tb->pin2) == HIGH) {
       tb->status2 = true;
-      tb->value -= TRACKBALLSTEP;
+      tb->value--;
     }
   }
 }
 
 void resetTrackball(trackballData *tb) {
-  int v = tb->value;
-  if(v > TRACKBALLMAX) v = TRACKBALLMAX;
-  else if(v < -TRACKBALLMAX) v = -TRACKBALLMAX;
+  long target = tb->realValue * TRACKBALLDAMP + tb->value * TRACKBALLSTEP;
+
+  if(target > TRACKBALLMAX) target = TRACKBALLMAX;
+  else if(target < -TRACKBALLMAX-1) target = -TRACKBALLMAX-1;
+
+  tb->realValue = (int)target;
 
   switch(tb->axisId) {
-    case AXIS_X: Joystick.setXAxis(v); break;
-    case AXIS_Y: Joystick.setYAxis(v); break;
-    case AXIS_Z: Joystick.setZAxis(v); break;
-    case AXIS_RX: Joystick.setRxAxis(v); break;
-    case AXIS_RY: Joystick.setRyAxis(v); break;
-    case AXIS_RZ: Joystick.setRzAxis(v); break;
+    case AXIS_X: Joystick.setXAxis(tb->realValue); break;
+    case AXIS_Y: Joystick.setYAxis(tb->realValue); break;
+    case AXIS_Z: Joystick.setZAxis(tb->realValue); break;
+    case AXIS_RX: Joystick.setRxAxis(tb->realValue); break;
+    case AXIS_RY: Joystick.setRyAxis(tb->realValue); break;
+    case AXIS_RZ: Joystick.setRzAxis(tb->realValue); break;
   }
 
-/*  if(tb->value > 0) {
-    tb->value -= TRACKBALLMAX;
+  if(tb->value > 0) {
+    //tb->value -= TRACKBALLMAX/2;
+    tb->value /= 1.2;
     if(tb->value < 0) tb->value = 0;
   } else if(tb->value < 0) {
-    tb->value += TRACKBALLMAX;
+    //tb->value += TRACKBALLMAX/2;
+    tb->value /= 1.2;
     if(tb->value > 0) tb->value = 0;
-  }*/
+  }
 }
 
 void setup() {
@@ -341,9 +348,9 @@ void setup() {
   tbX.pin1 = 3; // Dcha
   tbX.pin2 = 4; // Izq
   tbX.status1 = tbX.status2 = false;
-  tbX.value = 0;
+  tbX.value = tbX.realValue = 0;
   tbX.axisId = AXIS_X;
-  setAxisRange(tbX.axisId, -TRACKBALLMAX, TRACKBALLMAX);
+  setAxisRange(tbX.axisId, -TRACKBALLMAX-1, TRACKBALLMAX);
   pinMode(tbX.pin1, INPUT);
   pinMode(tbX.pin2, INPUT);
   resetTrackball(&tbX);
@@ -352,9 +359,9 @@ void setup() {
   tbY.pin1 = 5; // Dcha
   tbY.pin2 = 6; // Izq
   tbY.status1 = tbY.status2 = false;
-  tbY.value = 0;
+  tbY.value = tbY.realValue = 0;
   tbY.axisId = AXIS_Y;
-  setAxisRange(tbY.axisId, -TRACKBALLMAX, TRACKBALLMAX);
+  setAxisRange(tbY.axisId, -TRACKBALLMAX-1, TRACKBALLMAX);
   pinMode(tbY.pin1, INPUT);
   pinMode(tbY.pin2, INPUT);
   resetTrackball(&tbY);
