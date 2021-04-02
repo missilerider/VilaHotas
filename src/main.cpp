@@ -1,5 +1,8 @@
 #include <Arduino.h>
-#include "Joystick.h"
+//#include <Joystick.h>
+#include "Joystick2/Joystick2.h"
+
+#define TESTBTN
 
 #define TRACKBALLMAX  32767 // Pasos de movimiento de trackball = 100%
 #define TRACKBALLSTEP 8192
@@ -28,14 +31,58 @@
 #define BUTTONPRESSED(X)  ((X) >= 512 ? 0 : 1)
 #define ACTIVATION 100 // 100 millis pulsado cuando haya cambio de posición (bi y tri)
 
-#define TOTALBUTTONS  37 // Botones a notificar por HID
+//#define TOTALBUTTONS  37 // Botones a notificar por HID
 
-#define MAXBTN 4
-const unsigned char btnId[] =   {  0,    1,   2,  31,  21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 36, 32, 33, 34, 35 }; // Números de botones (0 based)
-const unsigned char btnAddr[] = { 15,    6,   4,   0,   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }; // Direcciones del multiplexor (MUX16)
-const unsigned char btnPin[] =  { IN3, IN3, IN3, IN3, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1 }; // Pines analógicos donde leer el dato
+#ifndef TESTBTN
+#define MAXBTN 37
+const unsigned char btnId[] =   {  0,    1,   2,  3,  4,  21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 36, 32, 33, 34, 35,               36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51 }; // Números de botón (0 based)
+const unsigned char btnAddr[] = { 15,    6,   4,   0,   0,   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,                        0, 1, 2,   3, 4,   5,   6,  7, 8,9,10,11,12,13,14,15 }; // Direcciones del multiplexor (MUX16)
+const unsigned char btnPin[] =  { IN3, IN3, IN3, IN3, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN1, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2, IN2 }; // Pines analógicos donde leer el dato
+#define TOTALBUTTONS (MAXBTN+(MAXTRI*3)+(MAXBI*2))  // Botones a notificar por HID
+#else
+#define TOTALBUTTONS 16*3
 
-#define MAXTRI 4
+unsigned char MAXBTN = 0;
+
+unsigned char btnId[16*3];
+unsigned char btnAddr[16*3];
+unsigned char btnPin[16*3];
+
+void testBtn() {
+  unsigned char displ;
+  unsigned char slot;
+  int nn;
+
+  displ = 0;
+  slot = IN1;
+  unsigned char id = 0;
+  for(nn = 0; nn <= 15; nn++) {
+    btnId[id] = nn+displ;
+    btnAddr[id] = nn;
+    btnPin[id] = slot;
+    id++;
+  }
+  displ = 16;
+  slot = IN2;
+  for(nn = 0; nn <= 15; nn++) {
+    btnId[id] = nn+displ;
+    btnAddr[id] = nn;
+    btnPin[id] = slot;
+    id++;
+  }
+  displ = 32;
+  slot = IN3;
+  for(nn = 0; nn <= 15; nn++) {
+    btnId[id] = nn+displ;
+    btnAddr[id] = nn;
+    btnPin[id] = slot;
+    id++;
+  }
+  MAXBTN = id;
+}
+#endif
+
+#define MAXTRI 0
 const unsigned char triBtn[] = { 3, 4, 5,   6, 7, 8,   9, 10, 11,   12, 13, 14  }; // Botones, en grupos de 3
 const unsigned char triAddr1[] {    7,        9,          11,           13      }; // Dirección MUX16 de posición izq
 const unsigned char triAddr2[] {    8,        10,         12,           14      }; // Dirección MUX16 de posición der
@@ -61,7 +108,7 @@ const char axisRev[] = { 0, 0 }; // 1 o 0, por si el valor está invertido
 unsigned int axisMax[MAXAXIS]; // Máximo leído de un eje
 unsigned int axisMin[MAXAXIS]; // Mínimo leído de un eje
 
-#define MAXHAT 1
+#define MAXHAT 0
 const unsigned char hatId[] = { 0 }; // Hats
 const unsigned char hatAddr[] = { 1, 2, 3, 5 }; // MUX16 en grupos de 4 (Up, Right, Down, Left)
 const unsigned char hatPin[] = { IN3 }; // Pines analógicos
@@ -313,6 +360,8 @@ void resetTrackball(trackballData *tb) {
 void setup() {
   Serial1.begin(115200);
   Serial1.println("Init");
+
+  testBtn();
 
 //  pinMode(IN0, INPUT_PULLUP);
   pinMode(IN0, INPUT); // Específico para sensor hall, AH3503
