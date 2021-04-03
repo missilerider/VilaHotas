@@ -1,31 +1,17 @@
-#include <Arduino.h>
-//#include <Joystick.h>
-#include "Joystick2/Joystick2.h"
-
-#define TESTBTN
-
 #define TRACKBALLMAX  32767 // Pasos de movimiento de trackball = 100%
 #define TRACKBALLSTEP 8192
 #define TRACKBALLDAMP 0.8
-#define UPDATEMILLIS 10 // Milisegundos entre actualizaciones de USB
 
-// Pines S0-S3 del MUX16
-#define MUXS0 10
-#define MUXS1 16
-#define MUXS2 14
-#define MUXS3 15
-// Alias de entradas analógicas
-#define IN0 A0
-#define IN1 A1
-#define IN2 A2
-#define IN3 A3
-// Constantes de identificación de ejes
-#define AXIS_X  0
-#define AXIS_Y  1
-#define AXIS_Z  2
-#define AXIS_RX 3
-#define AXIS_RY 4
-#define AXIS_RZ 5
+#include <Arduino.h>
+//#include <Joystick->h>
+//#include "Joystick2/Joystick2.h"
+#include "controls/controls.h"
+
+#include "joy_v1.h"
+
+//#define TESTBTN
+
+#define UPDATEMILLIS 10 // Milisegundos entre actualizaciones de USB
 
 // Macro para identificar si un botón está pulsado
 #define BUTTONPRESSED(X)  ((X) >= 512 ? 0 : 1)
@@ -126,22 +112,7 @@ struct trackballData {
   int realValue;
 } tbX, tbY;
 
-Joystick_ Joystick(
-  JOYSTICK_DEFAULT_REPORT_ID,
-  JOYSTICK_TYPE_JOYSTICK,
-  TOTALBUTTONS, // JOYSTICK_DEFAULT_BUTTON_COUNT
-  MAXHAT, // JOYSTICK_DEFAULT_HATSWITCH_COUNT
-  true, // xAxis
-  true, // yAxis
-  false, // zAxis
-  false, // rxAxis
-  false, // ryAxis
-  true, // rzAxis
-  false, // Rudder
-  false, // Throttle
-  false, // Accel
-  false, // Brake
-  false); // Steering
+Joystick_ *Joystick;
 
 void setAnalogAddress(unsigned char addr) {
   digitalWrite(MUXS0, addr & 0x1);
@@ -157,17 +128,17 @@ unsigned int readValue(int addr, int pin) {
 
 void setButton(unsigned char buttonId, unsigned char addr, unsigned char pin) {
   v = readValue(addr, pin);
-  Joystick.setButton(buttonId, BUTTONPRESSED(v));
+  Joystick->setButton(buttonId, BUTTONPRESSED(v));
 }
 
 void setAxisRange(unsigned char axisId, int min, int max) {
   switch(axisId) {
-    case AXIS_X: Joystick.setXAxisRange(min, max); break;
-    case AXIS_Y: Joystick.setYAxisRange(min, max); break;
-    case AXIS_Z: Joystick.setZAxisRange(min, max); break;
-    case AXIS_RX: Joystick.setRxAxisRange(min, max); break;
-    case AXIS_RY: Joystick.setRyAxisRange(min, max); break;
-    case AXIS_RZ: Joystick.setRzAxisRange(min, max); break;
+    case AXIS_X: Joystick->setXAxisRange(min, max); break;
+    case AXIS_Y: Joystick->setYAxisRange(min, max); break;
+    case AXIS_Z: Joystick->setZAxisRange(min, max); break;
+    case AXIS_RX: Joystick->setRxAxisRange(min, max); break;
+    case AXIS_RY: Joystick->setRyAxisRange(min, max); break;
+    case AXIS_RZ: Joystick->setRzAxisRange(min, max); break;
   }
 }
 
@@ -192,12 +163,12 @@ void setAxis(unsigned char axisId, unsigned char addr, unsigned char pin, char r
     setAxisRange(n, axisMin[n], axisMax[n]);
 
   switch(axisId) {
-    case AXIS_X: Joystick.setXAxis(v); break;
-    case AXIS_Y: Joystick.setYAxis(v); break;
-    case AXIS_Z: Joystick.setZAxis(v); break;
-    case AXIS_RX: Joystick.setRxAxis(v); break;
-    case AXIS_RY: Joystick.setRyAxis(v); break;
-    case AXIS_RZ: Joystick.setRzAxis(v); break;
+    case AXIS_X: Joystick->setXAxis(v); break;
+    case AXIS_Y: Joystick->setYAxis(v); break;
+    case AXIS_Z: Joystick->setZAxis(v); break;
+    case AXIS_RX: Joystick->setRxAxis(v); break;
+    case AXIS_RY: Joystick->setRyAxis(v); break;
+    case AXIS_RZ: Joystick->setRzAxis(v); break;
   }
 }
 
@@ -221,29 +192,29 @@ void setTristate(unsigned char triId, unsigned char btnLeft, unsigned char btnCe
 
   // Si paso mucho tiempo, todo cero
   if(triMillis[triId] < millis() - ACTIVATION) {
-    Joystick.setButton(btnLeft, 0);
-    Joystick.setButton(btnCenter, 0);
-    Joystick.setButton(btnRight, 0);
+    Joystick->setButton(btnLeft, 0);
+    Joystick->setButton(btnCenter, 0);
+    Joystick->setButton(btnRight, 0);
     return;
   }
 
   switch(triLast[triId]) {
     case 1:
-      Joystick.setButton(btnLeft, 1);
-      Joystick.setButton(btnCenter, 0);
-      Joystick.setButton(btnRight, 0);
+      Joystick->setButton(btnLeft, 1);
+      Joystick->setButton(btnCenter, 0);
+      Joystick->setButton(btnRight, 0);
       break;
 
     case 2:
-      Joystick.setButton(btnLeft, 0);
-      Joystick.setButton(btnCenter, 0);
-      Joystick.setButton(btnRight, 1);
+      Joystick->setButton(btnLeft, 0);
+      Joystick->setButton(btnCenter, 0);
+      Joystick->setButton(btnRight, 1);
       break;
 
     case 0:
-      Joystick.setButton(btnLeft, 0);
-      Joystick.setButton(btnCenter, 1);
-      Joystick.setButton(btnRight, 0);
+      Joystick->setButton(btnLeft, 0);
+      Joystick->setButton(btnCenter, 1);
+      Joystick->setButton(btnRight, 0);
       break;
   }
 }
@@ -264,20 +235,20 @@ void setBistate(unsigned char biId, unsigned char btnOn, unsigned char btnOff, u
 
   // Si paso mucho tiempo, todo cero
   if(biMillis[biId] < millis() - ACTIVATION) {
-    Joystick.setButton(btnOn, 0);
-    Joystick.setButton(btnOff, 0);
+    Joystick->setButton(btnOn, 0);
+    Joystick->setButton(btnOff, 0);
     return;
   }
 
   switch(biLast[biId]) {
     case 1:
-      Joystick.setButton(btnOn, 1);
-      Joystick.setButton(btnOff, 0);
+      Joystick->setButton(btnOn, 1);
+      Joystick->setButton(btnOff, 0);
       break;
 
     case 0:
-      Joystick.setButton(btnOn, 0);
-      Joystick.setButton(btnOff, 1);
+      Joystick->setButton(btnOn, 0);
+      Joystick->setButton(btnOff, 1);
       break;
   }
 }
@@ -289,18 +260,18 @@ void setHat(unsigned char hatId, unsigned char addrUp, unsigned char addrRight, 
   v = readValue(addrLeft, pin);
 
   if(BUTTONPRESSED(v)) { // Left
-    if(BUTTONPRESSED(w)) Joystick.setHatSwitch(hatId, 315); // L + U
-    else if(BUTTONPRESSED(y)) Joystick.setHatSwitch(hatId, 225); // L + D
-    else Joystick.setHatSwitch(hatId, 270); // L
+    if(BUTTONPRESSED(w)) Joystick->setHatSwitch(hatId, 315); // L + U
+    else if(BUTTONPRESSED(y)) Joystick->setHatSwitch(hatId, 225); // L + D
+    else Joystick->setHatSwitch(hatId, 270); // L
   } else if(BUTTONPRESSED(x)) { // Right
-    if(BUTTONPRESSED(w)) Joystick.setHatSwitch(hatId, 45); // R + U
-    else if(BUTTONPRESSED(y)) Joystick.setHatSwitch(hatId, 135); // R + D
-    else Joystick.setHatSwitch(hatId, 90); // R
+    if(BUTTONPRESSED(w)) Joystick->setHatSwitch(hatId, 45); // R + U
+    else if(BUTTONPRESSED(y)) Joystick->setHatSwitch(hatId, 135); // R + D
+    else Joystick->setHatSwitch(hatId, 90); // R
   } else if(BUTTONPRESSED(w)) { // Up
-    Joystick.setHatSwitch(hatId, 0);
+    Joystick->setHatSwitch(hatId, 0);
   } else if(BUTTONPRESSED(y)) { // Down
-    Joystick.setHatSwitch(hatId, 180);
-  } else Joystick.setHatSwitch(hatId, -1); // Sin pulsar
+    Joystick->setHatSwitch(hatId, 180);
+  } else Joystick->setHatSwitch(hatId, -1); // Sin pulsar
 }
 
 void processTrackball(trackballData *tb) {
@@ -338,12 +309,12 @@ void resetTrackball(trackballData *tb) {
   tb->realValue = (int)target;
 
   switch(tb->axisId) {
-    case AXIS_X: Joystick.setXAxis(tb->realValue); break;
-    case AXIS_Y: Joystick.setYAxis(tb->realValue); break;
-    case AXIS_Z: Joystick.setZAxis(tb->realValue); break;
-    case AXIS_RX: Joystick.setRxAxis(tb->realValue); break;
-    case AXIS_RY: Joystick.setRyAxis(tb->realValue); break;
-    case AXIS_RZ: Joystick.setRzAxis(tb->realValue); break;
+    case AXIS_X: Joystick->setXAxis(tb->realValue); break;
+    case AXIS_Y: Joystick->setYAxis(tb->realValue); break;
+    case AXIS_Z: Joystick->setZAxis(tb->realValue); break;
+    case AXIS_RX: Joystick->setRxAxis(tb->realValue); break;
+    case AXIS_RY: Joystick->setRyAxis(tb->realValue); break;
+    case AXIS_RZ: Joystick->setRzAxis(tb->realValue); break;
   }
 
   if(tb->value > 0) {
@@ -361,9 +332,6 @@ void setup() {
   Serial1.begin(115200);
   Serial1.println("Init");
 
-  testBtn();
-
-//  pinMode(IN0, INPUT_PULLUP);
   pinMode(IN0, INPUT); // Específico para sensor hall, AH3503
   pinMode(IN1, INPUT_PULLUP);
   pinMode(IN2, INPUT_PULLUP);
@@ -374,6 +342,35 @@ void setup() {
   pinMode(MUXS2, OUTPUT);
   pinMode(MUXS3, OUTPUT);
 
+  pinMode(7, OUTPUT);
+  digitalWrite(7, LOW);
+  pinMode(8, INPUT_PULLUP);
+  pinMode(9, INPUT_PULLUP);
+
+  unsigned char numBtn = 0, numHat = 0;
+  for(unsigned int k = 0; k < controlLen; k++) {
+    numBtn += controls[k]->getButtonNumber();
+    numHat += controls[k]->getHatNumber();
+  }
+
+  Joystick = new Joystick_(
+    JOYSTICK_DEFAULT_REPORT_ID,
+    JOYSTICK_TYPE_JOYSTICK,
+    numBtn, 
+    numHat, 
+    true, // xAxis
+    true, // yAxis
+    true, // zAxis
+    false, // rxAxis
+    true, // ryAxis
+    true, // rzAxis
+    false, // Rudder
+    false, // Throttle
+    false, // Accel
+    false, // Brake
+    false); // Steering
+
+
   setAxisRange(AXIS_X, 0, 1023); // Exclusivo A0, sensor hall
 
   // Rangos de ejes (mínimo)
@@ -382,6 +379,8 @@ void setup() {
     axisMin[n] = 511;
     setAxisRange(n, axisMin[n], axisMax[n]);
   }
+
+  setAxisRange(AXIS_Z, -TRACKBALLMAX, TRACKBALLMAX);
 
   for(n = 0; n < MAXTRI; n++) {
     triLast[n] = 3;
@@ -415,7 +414,7 @@ void setup() {
   pinMode(tbY.pin2, INPUT);
   resetTrackball(&tbY);
 
-  Joystick.begin(false); // autoSendMode = false
+  Joystick->begin(false); // autoSendMode = false
 }
 
 void loop() {
@@ -424,9 +423,25 @@ void loop() {
   processTrackball(&tbX);
   processTrackball(&tbY);
 
+  for(unsigned int k = 0; k < controlLen; k++) {
+    controls[k]->poll();
+  }
+
   if(now - lastUpdate < UPDATEMILLIS) return;
 
-  Joystick.setRzAxis(analogRead(IN0)); // Eje de acelerador
+  for(unsigned int k = 0; k < controlLen; k++) {
+    controls[k]->update(Joystick);
+  }
+
+  resetTrackball(&tbX);
+  resetTrackball(&tbY);
+
+  Joystick->setRzAxis(analogRead(IN0)); // Eje de acelerador
+
+  Joystick->sendState();
+  lastUpdate = now;
+
+  return;
 
   for(n = 0; n < MAXBTN; n++) {
     setButton(btnId[n], btnAddr[n], btnPin[n]);
@@ -452,7 +467,7 @@ void loop() {
   resetTrackball(&tbX);
   resetTrackball(&tbY);
 
-  Joystick.sendState();
+  Joystick->sendState();
   lastUpdate = now;
 
 /*  Serial1.print("X-: ");
